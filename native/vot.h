@@ -634,8 +634,10 @@ trax_region* _region_to_trax(const vot_region* region) {
 
 #ifdef __cplusplus
 #  define VOT_PREFIX(FUN) VOT::FUN
+#  define VOT_WRAPPER "cpp"
 #else
 #  define VOT_PREFIX(FUN) FUN
+#  define VOT_WRAPPER "c"
 #endif
 
 
@@ -677,6 +679,8 @@ vot_region* VOT_PREFIX(vot_initialize)() {
     #endif
 
     trax_metadata* metadata = trax_metadata_create(region_format, TRAX_IMAGE_PATH, channels, NULL, NULL, NULL);
+
+    trax_properties_set(metadata->custom, "vot", VOT_WRAPPER);
 
     _trax_handle = trax_server_setup(metadata, trax_no_log);
 
