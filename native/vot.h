@@ -805,7 +805,7 @@ void VOT_PREFIX(vot_report2)(vot_region* region, float confidence) {
 
 int VOT_PREFIX(vot_end)() {
 
-    return 0;
+    return _trax_handle == NULL;
 
 }
 
