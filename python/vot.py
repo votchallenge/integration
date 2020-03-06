@@ -51,7 +51,7 @@ class VOT(object):
         if isinstance(request.region, trax.Polygon):
             self._region = Polygon([Point(x[0], x[1]) for x in request.region])
         if isinstance(request.region, trax.Mask):
-            self._region = request.array(True)
+            self._region = request.region.array(True)
         else:
             self._region = Rectangle(*request.region.bounds())
         self._image = [x.path() for k, x in request.image.items()]
@@ -78,10 +78,10 @@ class VOT(object):
         Arguments:
             region: region for the frame
         """
-        assert(isinstance(region, Rectangle) or isinstance(region, Polygon))
+        assert(isinstance(region, (Rectangle, Polygon, np.ndarray)))
         if isinstance(region, Polygon):
             tregion = trax.Polygon.create([(x.x, x.y) for x in region.points])
-        if isinstance(region, type(np.array)):
+        if isinstance(region, np.ndarray):
             tregion = trax.Mask.create(region)
         else:
             tregion = trax.Rectangle.create(region.x, region.y, region.width, region.height)

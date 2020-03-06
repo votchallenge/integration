@@ -610,7 +610,7 @@ vot_region* _trax_to_region(const trax_region* _trax_region) {
     vot_region* region = vot_region_create(x + width, y + height);
 
     for (i = 0; i < height; i++) {
-        memcpy(&(region->data[width * (i + y) + x]), trax_region_get_mask_row(_trax_region, i), region->width * sizeof(char));
+        memcpy(&(region->data[(width + x) * (i + y) + x]), trax_region_get_mask_row(_trax_region, i), width * sizeof(char));
     }
 
     return region;
