@@ -18,16 +18,6 @@ catch
     RandStream.setGlobalStream(RandStream('mt19937ar', 'Seed', sum(clock)));
 end
 
-
-image = uint8(rand(240, 320, 3) * 255);
-imwrite(image, 'test.jpg');
-image = imread('test.jpg');
-region = [30, 30, 30, 30];
-[state, ~] = ncc_initialize(image, region);
-[state, region] = ncc_update(state, image);
-[state, region] = ncc_update(state, image);
-[state, region] = ncc_update(state, image);
-
 % **********************************
 % VOT: Get initialization data
 % **********************************
