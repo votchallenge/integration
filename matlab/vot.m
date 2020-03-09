@@ -69,7 +69,7 @@ function [handle, image, region] = tracker_initialize(format, channels)
         addpath(getenv('TRAX_MEX'));
     end;
 
-    traxserver('setup', format, 'path', 'Channels', channels, "vot", "matlab");
+    traxserver('setup', format, 'path', 'Channels', channels, 'vot', 'matlab');
 
     [image, region] = traxserver('wait');
 
