@@ -50,7 +50,7 @@ class VOT(object):
         assert(request.type == 'initialize')
         if isinstance(request.region, trax.Polygon):
             self._region = Polygon([Point(x[0], x[1]) for x in request.region])
-        if isinstance(request.region, trax.Mask):
+        elif isinstance(request.region, trax.Mask):
             self._region = request.region.array(True)
         else:
             self._region = Rectangle(*request.region.bounds())
@@ -81,7 +81,7 @@ class VOT(object):
         assert(isinstance(region, (Rectangle, Polygon, np.ndarray)))
         if isinstance(region, Polygon):
             tregion = trax.Polygon.create([(x.x, x.y) for x in region.points])
-        if isinstance(region, np.ndarray):
+        elif isinstance(region, np.ndarray):
             tregion = trax.Mask.create(region)
         else:
             tregion = trax.Rectangle.create(region.x, region.y, region.width, region.height)
