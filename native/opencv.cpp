@@ -40,6 +40,7 @@
 #include <iostream>
 #include <stdio.h>
 
+#define VOT_MULTI_OBJECT
 #define VOT_RECTANGLE
 #include "vot.h"
 
@@ -47,40 +48,47 @@
 #define TRACKER TrackerCSRT
 #endif
 
-int main( int argc, char** argv) {
+class Tracker : public VOTTracker {
 
-    cv::Ptr<cv::Tracker> tracker;
+public:
+    Tracker(const VOTImage& image, const VOTRegion& region) : VOTTracker(image, region) {
 
-    tracker = cv::TRACKER::create().dynamicCast<cv::Tracker>();
+        tracker = cv::TRACKER::create().dynamicCast<cv::Tracker>();
+        cv::Rect initialization;
+        initialization << region;
+        cv::Mat frame = cv::imread(image.color);
+        tracker->init(frame, cv::Rect2d(initialization));
 
-    VOT vot;
+    }
 
-    cv::Rect initialization;
-    initialization << vot.region();
-    cv::Mat image = cv::imread(vot.frame());
-    tracker->init(image, cv::Rect2d(initialization));
+    virtual VOTRegion update(const VOTImage& image) {
 
-    while (!vot.end()) {
-
-        string imagepath = vot.frame();
-
-        if (imagepath.empty()) break;
-
-        cv::Mat image = cv::imread(imagepath);
-
-        float confidence;
+        cv::Mat frame = cv::imread(image.color);
 
         cv::Rect2d rect;
 
-        bool ok = tracker->update(image, rect);
+        bool ok = tracker->update(frame, rect);
 
         if (!ok) {
             std::cout << "Not ok" << std::endl;
         }
 
-        vot.report(cv::Rect(rect));
+        return cv::Rect(rect);
 
     }
+
+private:
+
+    cv::Ptr<cv::Tracker> tracker;
+
+};
+
+
+int main( int argc, char** argv) {
+
+    VOTManager<Tracker> vot;
+
+    vot.run();
 
 }
 

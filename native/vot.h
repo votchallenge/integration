@@ -3,7 +3,7 @@
  * This header file contains C functions that can be used to quickly integrate
  * VOT challenge support into your C or C++ tracker.
  *
- * Copyright (c) 2017, VOT Committee
+ * Copyright (c) 2023, VOT Initiative
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -43,6 +43,7 @@
 #include <trax.h>
 
 #define VOT_READ_BUFFER 2024
+#define VOT_MAX_OBJECTS 100
 
 // Define VOT_OPENCV after including OpenCV core header to enable better OpenCV support
 #if defined(__OPENCV_CORE_HPP__) || defined(OPENCV_CORE_HPP)
@@ -53,18 +54,16 @@
     #ifndef _VOT_REGION
         #define _VOT_REGION 1
     #endif
-#endif
-
-#ifdef VOT_POLYGON
+#elif defined(VOT_POLYGON)
     #ifndef _VOT_REGION
         #define _VOT_REGION 2
     #endif
-#endif
-
-#ifdef VOT_MASK
+#elif defined(VOT_MASK)
     #ifndef _VOT_REGION
         #define _VOT_REGION 3
     #endif
+#else
+    #define _VOT_REGION 1
 #endif
 
 // Default region is polygon
@@ -87,6 +86,7 @@ typedef struct vot_image {
 } vot_image;
 
 #if _VOT_REGION == 1
+
 typedef struct vot_region {
     float x;
     float y;
@@ -121,7 +121,6 @@ vot_region* vot_region_copy(const vot_region* region) {
     copy->height = region->height;
     return copy;
 }
-
 
 #endif
 #if _VOT_REGION == 2
@@ -203,11 +202,14 @@ vot_region* vot_region_copy(const vot_region* region) {
 
 #endif
 
+typedef vot_region** vot_objects;
+
 #ifdef __cplusplus
 
 #include <string>
 #include <fstream>
 #include <iostream>
+#include <type_traits>
 
 using namespace std;
 
@@ -237,6 +239,22 @@ public:
 
     VOTRegion(const vot_region* region) {
         _region = vot_region_copy(region);
+    }
+
+    VOTRegion(const VOTRegion& region) {
+        _region = vot_region_copy(region._region);
+    }
+
+    VOTRegion(VOTRegion&& region) {
+        _region = region._region;
+        region._region = NULL;
+    }
+
+    VOTRegion& operator= (VOTRegion&& region) {
+        vot_region_release(&_region);
+        _region = region._region;
+        region._region = NULL;
+        return *this;
     }
 
 #if _VOT_REGION == 1
@@ -482,36 +500,64 @@ void operator>> (const cv::Mat& mask, VOTRegion &source) {
 class VOT {
 public:
     VOT() {
-        _region = vot_initialize();
+        vot_initialize();
     }
 
     ~VOT() {
         vot_quit();
     }
 
+    #ifdef VOT_MULTI_OBJECT
+    const std::vector<VOTRegion> objects() {
+
+        std::vector<VOTRegion> wrappers;
+        
+        for (int i = 0; i < VOT_MAX_OBJECTS; i++) {
+            if (_objects[i])
+                wrappers.push_back(VOTRegion(_objects[i]));
+            else break;
+        }
+
+        return wrappers;
+    }
+
+    void report(const std::vector<VOTRegion>& objects) {
+
+        vot_objects unwrapped = new vot_region*[objects.size()+1];
+
+        for (int i = 0; i < objects.size(); i++) {
+            unwrapped[i] = objects[i]._region;
+        }
+
+        unwrapped[objects.size()] = NULL;
+
+        vot_report(unwrapped);
+    }
+
+    #else
     const VOTRegion region() {
-        return VOTRegion(_region);
+        return VOTRegion(_objects[0]);
     }
 
     void report(const VOTRegion& region, float confidence = 1) {
-
         vot_report2(region._region, confidence);
-
     }
+    #endif
 
 #if defined(VOT_RGBD) || defined(VOT_RGBT)
     const VOTImage frame() {
+        return image();
+    }
 #else
     const string frame() {
+        return image().color;
+    }
 #endif
+
+    const VOTImage image() {
 
         const vot_image* result = vot_frame();
-
-#if defined(VOT_RGBD) || defined(VOT_RGBT)
         VOTImage wrapper;
-#else
-        string wrapper;
-#endif
 
         if (!result)
             return wrapper;
@@ -523,9 +569,9 @@ public:
         wrapper.color = string(_image.color);
         wrapper.ir = string(_image.ir);
 #elif defined(VOT_IR)
-        wrapper = string(_image.ir);
+        wrapper.ir = string(_image.ir);
 #else
-        wrapper = string(_image.color);
+        wrapper.color = string(_image.color);
 #endif
         return wrapper;
     }
@@ -534,26 +580,24 @@ public:
         return vot_end() != 0;
     }
 
-
-
-
 private:
-
-    vot_region* vot_initialize();
 
     void vot_quit();
 
     const vot_image* vot_frame();
 
+#ifdef VOT_MULTI_OBJECT
+    void vot_report(vot_objects objects);
+    vot_objects vot_initialize();
+#else
+    vot_region* vot_initialize();
     void vot_report(vot_region* region);
-
     void vot_report2(vot_region* region, float confidence);
+#endif
 
     int vot_end();
 
 #endif
-
-    vot_region* _region;
 
     // Current position in the sequence
     int _vot_sequence_position;
@@ -567,6 +611,8 @@ private:
     trax_handle* _trax_handle;
 
     vot_image _image;
+
+    vot_region* _objects[VOT_MAX_OBJECTS];
 
 #if _VOT_REGION == 1
 
@@ -630,6 +676,70 @@ trax_region* _region_to_trax(const vot_region* region) {
 
 };
 
+#ifdef VOT_MULTI_OBJECT
+
+class VOTTracker {
+
+public:
+
+    VOTTracker(const VOTImage& image, const VOTRegion& region) { }
+
+    virtual VOTRegion update(const VOTImage& image) = 0;
+
+};
+
+template<typename T>
+class VOTManager {
+    
+public:
+
+    VOTManager() {
+        _vot = new VOT();
+    }
+
+    ~VOTManager() {
+        if (_vot)
+            delete _vot;
+    }
+
+    void run() {
+
+        std::vector<VOTRegion> objects = _vot->objects();
+        VOTImage image = _vot->image();
+
+        for (int i = 0; i < objects.size(); i++) {
+            _trackers.push_back(new T(image, objects[i]));
+        }
+
+        while (!_vot->end()) {
+
+            VOTImage image = _vot->image();
+            std::vector<VOTRegion> state;
+
+            for (int i = 0; i < _trackers.size(); i++) {
+                state.push_back(_trackers[i]->update(image));
+            }
+
+            _vot->report(state);
+
+        }
+
+        for (int i = 0; i < _trackers.size(); i++) {
+            delete _trackers[i];
+        }
+
+    }
+
+private:
+
+    VOT* _vot = NULL;
+
+    std::vector<T*> _trackers;
+
+};
+
+#endif
+
 #endif
 
 #ifdef __cplusplus
@@ -646,18 +756,31 @@ trax_region* _region_to_trax(const vot_region* region) {
  * position of the object as specified in the input data. This function should
  * be called at the beginning of the program.
  */
-vot_region* VOT_PREFIX(vot_initialize)() {
+#ifdef VOT_MULTI_OBJECT
+vot_objects
+#else
+vot_region* 
+#endif
+VOT_PREFIX(vot_initialize)() {
 
     int j;
+    int flags;
     FILE *inputfile;
     FILE *imagesfile;
 
     _vot_sequence_position = 0;
     _vot_sequence_size = 0;
+    flags = 0;
+
+    #ifdef VOT_MULTI_OBJECT
+    flags |= TRAX_METADATA_MULTI_OBJECT;
+    #endif
+
+    assert(_trax_handle == NULL);
 
     trax_configuration config;
     trax_image_list* _trax_image = NULL;
-    trax_region* _trax_region = NULL;
+    trax_object_list* _trax_objects = NULL;
     _trax_handle = NULL;
     int response;
     #if _VOT_REGION == 1
@@ -678,7 +801,7 @@ vot_region* VOT_PREFIX(vot_initialize)() {
     int channels = TRAX_CHANNEL_COLOR;
     #endif
 
-    trax_metadata* metadata = trax_metadata_create(region_format, TRAX_IMAGE_PATH, channels, NULL, NULL, NULL);
+    trax_metadata* metadata = trax_metadata_create(region_format, TRAX_IMAGE_PATH, channels, NULL, NULL, NULL, flags);
 
     trax_properties_set(metadata->custom, "vot", VOT_WRAPPER);
 
@@ -686,7 +809,7 @@ vot_region* VOT_PREFIX(vot_initialize)() {
 
     trax_metadata_release(&metadata);
 
-    response = trax_server_wait(_trax_handle, &_trax_image, &_trax_region, NULL);
+    response = trax_server_wait(_trax_handle, &_trax_image, &_trax_objects, NULL);
 
     assert(response == TRAX_INITIALIZE);
 
@@ -702,16 +825,24 @@ vot_region* VOT_PREFIX(vot_initialize)() {
         strcpy(_image.color, trax_image_get_path(trax_image_list_get(_trax_image, TRAX_CHANNEL_COLOR)));
 #endif
 
-    trax_server_reply(_trax_handle, _trax_region, NULL);
+    trax_server_reply(_trax_handle, _trax_objects);
 
-    vot_region* region = _trax_to_region(_trax_region);
+    memset(_objects, 0, sizeof(vot_region*) * VOT_MAX_OBJECTS);
 
-    trax_region_release(&_trax_region);
+    for (j = 0; j < trax_object_list_count(_trax_objects); j++) {
+        trax_region* object = trax_object_list_get(_trax_objects, j);
+        _objects[j] = _trax_to_region(object);
+    }
+
+    trax_object_list_release(&_trax_objects);
     trax_image_list_clear(_trax_image);
     trax_image_list_release(&_trax_image);
 
-    return region;
-
+    #ifdef VOT_MULTI_OBJECT
+        return _objects;
+    #else
+        return _objects[0];
+    #endif
 }
 
 /**
@@ -719,9 +850,18 @@ vot_region* VOT_PREFIX(vot_initialize)() {
  * called at the end of the tracking program.
  */
 void VOT_PREFIX(vot_quit)() {
+    int i;
 
     if (_trax_handle) {
         trax_cleanup(&_trax_handle);
+
+        for (i = 0; i < VOT_MAX_OBJECTS; i++) {
+            if (_objects[i]) {
+                vot_region_release(&(_objects[i]));
+                _objects[i] = NULL;
+            }
+        }
+
         return;
     }
 
@@ -733,75 +873,109 @@ void VOT_PREFIX(vot_quit)() {
  */
 const vot_image* VOT_PREFIX(vot_frame)() {
 
-    if (_trax_handle) {
-        int response;
-        trax_image_list* _trax_image = NULL;
-        trax_region* _trax_region = NULL;
+    assert (_trax_handle);
 
-        if (_vot_sequence_position == 0) {
-            _vot_sequence_position++;
-            return &_image;
-        }
+    int response;
+    trax_image_list* _trax_image = NULL;
+    trax_object_list* _trax_objects = NULL;
 
-        response = trax_server_wait(_trax_handle, &_trax_image, &_trax_region, NULL);
+    if (_vot_sequence_position == 0) {
+        _vot_sequence_position++;
+        return &_image;
+    }
 
-        if (response != TRAX_FRAME) {
-            vot_quit();
-            return NULL;
-        }
+    response = trax_server_wait(_trax_handle, &_trax_image, &_trax_objects, NULL);
 
+    assert(_trax_objects == NULL || trax_object_list_count(_trax_objects) == 0);
+
+    trax_object_list_release(&_trax_objects);
+
+    if (response != TRAX_FRAME) {
+        vot_quit();
+        return NULL;
+    }
 
 #if defined(VOT_RGBD)
-        strcpy(_image.color, trax_image_get_path(trax_image_list_get(_trax_image, TRAX_CHANNEL_COLOR)));
-        strcpy(_image.depth, trax_image_get_path(trax_image_list_get(_trax_image, TRAX_CHANNEL_DEPTH)));
+    strcpy(_image.color, trax_image_get_path(trax_image_list_get(_trax_image, TRAX_CHANNEL_COLOR)));
+    strcpy(_image.depth, trax_image_get_path(trax_image_list_get(_trax_image, TRAX_CHANNEL_DEPTH)));
 #elif defined(VOT_RGBT)
-        strcpy(_image.color, trax_image_get_path(trax_image_list_get(_trax_image, TRAX_CHANNEL_COLOR)));
-        strcpy(_image.ir, trax_image_get_path(trax_image_list_get(_trax_image, TRAX_CHANNEL_IR)));
+    strcpy(_image.color, trax_image_get_path(trax_image_list_get(_trax_image, TRAX_CHANNEL_COLOR)));
+    strcpy(_image.ir, trax_image_get_path(trax_image_list_get(_trax_image, TRAX_CHANNEL_IR)));
 #elif defined(VOT_IR)
-        strcpy(_image.ir, trax_image_get_path(trax_image_list_get(_trax_image, TRAX_CHANNEL_IR)));
+    strcpy(_image.ir, trax_image_get_path(trax_image_list_get(_trax_image, TRAX_CHANNEL_IR)));
 #else
-        strcpy(_image.color, trax_image_get_path(trax_image_list_get(_trax_image, TRAX_CHANNEL_COLOR)));
+    strcpy(_image.color, trax_image_get_path(trax_image_list_get(_trax_image, TRAX_CHANNEL_COLOR)));
 #endif
-        trax_image_list_clear(_trax_image);
-        trax_image_list_release(&_trax_image);
+    trax_image_list_clear(_trax_image);
+    trax_image_list_release(&_trax_image);
 
-        return &_image;
+    return &_image;
 
-    }
 }
 
 /**
  * Used to report position of the object. This function also advances the
  * current position.
  */
+#ifdef VOT_MULTI_OBJECT
+
+void VOT_PREFIX(vot_report)(vot_objects objects) {
+
+    int i;
+
+    assert (_trax_handle);
+
+    for (i = 0; i < VOT_MAX_OBJECTS; i++) {
+        if (!objects[i]) {
+            break;
+        }
+    }
+
+    trax_object_list* _objects = trax_object_list_create(i);
+
+    for (i = 0; i < trax_object_list_count(_objects); i++) {
+        trax_region* _trax_region = _region_to_trax(objects[i]);
+        trax_object_list_set(_objects, i, _trax_region);
+        trax_region_release(&_trax_region);
+    }
+
+    trax_server_reply(_trax_handle, _objects);
+    trax_object_list_release(&_objects);
+
+}
+
+#else
+
 void VOT_PREFIX(vot_report)(vot_region* region) {
 
-    if (_trax_handle) {
-        trax_region* _trax_region = _region_to_trax(region);
-        trax_server_reply(_trax_handle, _trax_region, NULL);
-        trax_region_release(&_trax_region);
-        return;
-    }
+    assert (_trax_handle);
+
+    trax_object_list* _objects = trax_object_list_create(1);
+    trax_region* _trax_region = _region_to_trax(region);
+    trax_object_list_set(_objects, 0, _trax_region);
+    trax_region_release(&_trax_region);
+
+    trax_server_reply(_trax_handle, _objects);
+    trax_object_list_release(&_objects);
 
 }
 
-/**
- * Used to report position of the object. This function also advances the
- * current position.
- */
+
 void VOT_PREFIX(vot_report2)(vot_region* region, float confidence) {
 
-    if (_trax_handle) {
-        trax_region* _trax_region = _region_to_trax(region);
-        trax_properties* _trax_properties = trax_properties_create();
-        trax_properties_set_float(_trax_properties, "confidence", confidence);
-        trax_server_reply(_trax_handle, _trax_region, _trax_properties);
-        trax_region_release(&_trax_region);
-        trax_properties_release(&_trax_properties);
-        return;
-    }
+    assert (_trax_handle);
+
+    trax_object_list* _objects = trax_object_list_create(1);
+    trax_region* _trax_region = _region_to_trax(region);
+    trax_object_list_set(_objects, 0, _trax_region);
+    trax_properties_set_float(trax_object_list_properties(_objects, 0), "confidence", confidence);
+    trax_region_release(&_trax_region);
+    trax_server_reply(_trax_handle, _objects);
+    trax_object_list_release(&_objects);
 
 }
+
+#endif
 
 int VOT_PREFIX(vot_end)() {
 
