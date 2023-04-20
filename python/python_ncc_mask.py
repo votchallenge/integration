@@ -2,10 +2,8 @@
 
 import vot
 import sys
-import time
 import cv2
 import numpy as np
-import collections
 
 class NCCTracker(object):
 
