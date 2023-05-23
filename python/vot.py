@@ -1,11 +1,11 @@
 """
 \file vot.py
 
-@brief Python utility functions for VOT integration
+@brief Python utility functions for VOT toolkit integration
 
 @author Luka Cehovin, Alessio Dore
 
-@date 2016
+@date 2023
 
 """
 
@@ -109,9 +109,9 @@ class VOT(object):
 
         def convert(region):
             if region is None: return trax.Special(0)
-            assert isinstance(region, (Rectangle, Polygon, np.ndarray))
+            assert isinstance(region, (Empty, Rectangle, Polygon, np.ndarray))
             if isinstance(region, Empty): 
-                return trax.Rectangle.create(0, 0, 0, 0)
+                return trax.Special(0)
             elif isinstance(region, Polygon):
                 return trax.Polygon.create([(x.x, x.y) for x in region.points])
             elif isinstance(region, np.ndarray):
@@ -163,6 +163,7 @@ class VOT(object):
             self._trax.quit()
 
     def __del__(self):
+        """ Destructor for the tracker, calls quit. """
         self.quit()
 
 class VOTManager(object):
@@ -181,6 +182,7 @@ class VOTManager(object):
         self._factory = factory
 
     def run(self):
+        """ Run the tracker, the tracking loop is implemented in this function, so it will block until the client terminates the connection."""
         objects = self._handle.objects()
 
         # Process the first frame

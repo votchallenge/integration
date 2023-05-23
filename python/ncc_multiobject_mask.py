@@ -40,7 +40,8 @@ class NCCTracker(object):
 
         self.position = (left + max_loc[0] + float(self.size[0]) / 2, top + max_loc[1] + float(self.size[1]) / 2)
 
-        return self._mask_from_rect([left + max_loc[0], top + max_loc[1], self.size[0], self.size[1]], (image.shape[1], image.shape[0])), max_val
+        #return vot.Rectangle(left + max_loc[0], top + max_loc[1], self.size[0], self.size[1])
+        return self._mask_from_rect([left + max_loc[0], top + max_loc[1], self.size[0], self.size[1]], (image.shape[1], image.shape[0]))
 
     def _rect_from_mask(self, mask):
         '''
@@ -55,60 +56,34 @@ class NCCTracker(object):
         y1 = np.max(np.nonzero(y_))
         return [x0, y0, x1 - x0 + 1, y1 - y0 + 1]
 
-    def _mask_from_rect(self, rect, output_sz):
+    def _mask_from_rect(self, rect, output_size):
         '''
         create a binary mask from a given rectangle
         rect: axis-aligned rectangle [x0, y0, width, height]
         output_sz: size of the output [width, height]
         '''
-        mask = np.zeros((output_sz[1], output_sz[0]), dtype=np.uint8)
+        mask = np.zeros((output_size[1], output_size[0]), dtype=np.uint8)
         x0 = max(int(round(rect[0])), 0)
         y0 = max(int(round(rect[1])), 0)
-        x1 = min(int(round(rect[0] + rect[2])), output_sz[0])
-        y1 = min(int(round(rect[1] + rect[3])), output_sz[1])
+        x1 = min(int(round(rect[0] + rect[2])), output_size[0])
+        y1 = min(int(round(rect[1] + rect[3])), output_size[1])
         mask[y0:y1, x0:x1] = 1
         return mask
 
 
-def make_full_size(x, output_sz):
-    '''
-    zero-pad input x (right and down) to match output_sz
-    x: numpy array e.g., binary mask
-    output_sz: size of the output [width, height]
-    '''
-    if x.shape[0] == output_sz[1] and x.shape[1] == output_sz[0]:
-        return x
-    pad_x = output_sz[0] - x.shape[1]
-    if pad_x < 0:
-        x = x[:, :x.shape[1] + pad_x]
-        # padding has to be set to zero, otherwise pad function fails
-        pad_x = 0
-    pad_y = output_sz[1] - x.shape[0]
-    if pad_y < 0:
-        x = x[:x.shape[0] + pad_y, :]
-        # padding has to be set to zero, otherwise pad function fails
-        pad_y = 0
-    return np.pad(x, ((0, pad_y), (0, pad_x)), 'constant', constant_values=0)
-
-
-handle = vot.VOT("mask")
-selection = handle.region()
+handle = vot.VOT("mask", multiobject=True)
+objects = handle.objects()
 
 imagefile = handle.frame()
-if not imagefile:
-    sys.exit(0)
 
 image = cv2.imread(imagefile, cv2.IMREAD_GRAYSCALE)
 
-# mask given by the toolkit ends with the target (zero-padding to the right and down is needed)
-mask = make_full_size(selection, (image.shape[1], image.shape[0]))
+trackers = [NCCTracker(image, object) for object in objects]
 
-tracker = NCCTracker(image, mask)
 while True:
     imagefile = handle.frame()
     if not imagefile:
         break
     image = cv2.imread(imagefile, cv2.IMREAD_GRAYSCALE)
-    m, confidence = tracker.track(image)
-    handle.report(m, confidence)
+    handle.report([tracker.track(image) for tracker in trackers])
 
