@@ -9,6 +9,7 @@
 
 """
 
+import os
 import collections
 import numpy as np
 
@@ -20,12 +21,13 @@ except ImportError:
 Rectangle = collections.namedtuple('Rectangle', ['x', 'y', 'width', 'height'])
 Point = collections.namedtuple('Point', ['x', 'y'])
 Polygon = collections.namedtuple('Polygon', ['points'])
+Empty = collections.namedtuple('Empty', [])
 
 class VOT(object):
     """ Base class for VOT toolkit integration in Python.
         This class is only a wrapper around the TraX protocol and can be used for single or multi-object tracking.
         The wrapper assumes that the experiment will provide new objects onlf at the first frame and will fail otherwise."""
-    def __init__(self, region_format, channels=None, multiobject=False):
+    def __init__(self, region_format, channels=None, multiobject: bool = None):
         """ Constructor for the VOT wrapper.
 
         Args:
@@ -34,6 +36,9 @@ class VOT(object):
             multiobject: Whether to use multi-object tracking
         """
         assert(region_format in [trax.Region.RECTANGLE, trax.Region.POLYGON, trax.Region.MASK])
+
+        if multiobject is None:
+            multiobject = os.environ.get('VOT_MULTI_OBJECT', '0') == '1'
 
         if channels is None:
             channels = ['color']
@@ -105,7 +110,9 @@ class VOT(object):
         def convert(region):
             if region is None: return trax.Special(0)
             assert isinstance(region, (Rectangle, Polygon, np.ndarray))
-            if isinstance(region, Polygon):
+            if isinstance(region, Empty): 
+                return trax.Rectangle.create(0, 0, 0, 0)
+            elif isinstance(region, Polygon):
                 return trax.Polygon.create([(x.x, x.y) for x in region.points])
             elif isinstance(region, np.ndarray):
                 return trax.Mask.create(region)
@@ -151,6 +158,7 @@ class VOT(object):
             return None
 
     def quit(self):
+        """ Quit the tracker"""
         if hasattr(self, '_trax'):
             self._trax.quit()
 
