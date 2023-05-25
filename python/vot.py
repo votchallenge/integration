@@ -108,10 +108,12 @@ class VOT(object):
         """
 
         def convert(region):
-            if region is None: return trax.Special(0)
+            """ Convert region to TraX format """
+            # If region is None, return empty region
+            if region is None: return trax.Rectangle.create(0, 0, 0, 0)
             assert isinstance(region, (Empty, Rectangle, Polygon, np.ndarray))
-            if isinstance(region, Empty): 
-                return trax.Special(0)
+            if isinstance(region, Empty):
+                return trax.Rectangle.create(0, 0, 0, 0)
             elif isinstance(region, Polygon):
                 return trax.Polygon.create([(x.x, x.y) for x in region.points])
             elif isinstance(region, np.ndarray):

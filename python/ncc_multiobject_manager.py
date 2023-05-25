@@ -41,6 +41,10 @@ def NCCTracker(image, region):
         position[0] = left + max_loc[0] + float(size[0]) / 2
         position[1] = top + max_loc[1] + float(size[1]) / 2
 
+        # An example of how to use the response value threshold to report object not found
+        if max_val < 0.5:
+            return vot.Empty()
+
         return vot.Rectangle(left + max_loc[0], top + max_loc[1], size[0], size[1])
 
     return track
