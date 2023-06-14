@@ -122,17 +122,15 @@ class VOT(object):
                 return trax.Rectangle.create(region.x, region.y, region.width, region.height)
 
         if not self._multiobject:
-            status = convert(status)
+            status = [(convert(status), {})]
         else:
             assert isinstance(status, (list, tuple))
             status = [(convert(x), {}) for x in status]
 
-        properties = {}
-
         if not confidence is None and not self._multiobject:
-            properties['confidence'] = confidence
-
-        self._trax.status(status, properties)
+            status[0]['confidence'] = confidence
+    
+        self._trax.status(status, {})
 
     def frame(self):
         """
