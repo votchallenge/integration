@@ -608,7 +608,7 @@ private:
     // List of results
     vot_region** _vot_result;
 
-    trax_handle* _trax_handle;
+    trax_handle* _trax_handle = NULL;
 
     vot_image _image;
 
