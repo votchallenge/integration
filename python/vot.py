@@ -18,6 +18,9 @@ try:
 except ImportError:
     raise Exception('TraX support not found. Please add trax module to Python path.')
 
+if trax._ctypes.trax_version().decode("ascii") < "4.0.0":
+    raise ImportError('TraX version 4.0.0 or newer is required.')
+
 Rectangle = collections.namedtuple('Rectangle', ['x', 'y', 'width', 'height'])
 Point = collections.namedtuple('Point', ['x', 'y'])
 Polygon = collections.namedtuple('Polygon', ['points'])
@@ -122,14 +125,14 @@ class VOT(object):
                 return trax.Rectangle.create(region.x, region.y, region.width, region.height)
 
         if not self._multiobject:
-            status = [(convert(status), {})]
+            properties = {}
+            if not confidence is None:
+                properties['confidence'] = confidence
+            status = [(convert(status), properties)]
         else:
             assert isinstance(status, (list, tuple))
             status = [(convert(x), {}) for x in status]
 
-        if not confidence is None and not self._multiobject:
-            status[0]['confidence'] = confidence
-    
         self._trax.status(status, {})
 
     def frame(self):
