@@ -20,7 +20,7 @@ ADD_EXECUTABLE(ncc ncc.cpp) # Generate executable for OpenCV demo tracker
 TARGET_LINK_LIBRARIES(ncc ${OpenCV_LIBS}) # Link with trax library
 
 IF ("opencv_tracking" IN_LIST OpenCV_LIBS)
-FOREACH(TRACKER "CSRT" "MIL" "MedianFlow" "MOSSE" "KCF" "Boosting" "GOTURN")
+FOREACH(TRACKER "CSRT" "KCF")
 ADD_EXECUTABLE(opencv_${TRACKER} opencv.cpp)
 TARGET_COMPILE_DEFINITIONS(opencv_${TRACKER} PUBLIC -DTRACKER=Tracker${TRACKER})
 TARGET_LINK_LIBRARIES(opencv_${TRACKER} ${OpenCV_LIBS}) # Link with OpenCV library

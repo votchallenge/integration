@@ -65,7 +65,7 @@ public:
 
         cv::Mat frame = cv::imread(image.color);
 
-        cv::Rect2d rect;
+        cv::Rect rect;
 
         bool ok = tracker->update(frame, rect);
 
