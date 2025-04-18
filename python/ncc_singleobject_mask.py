@@ -6,7 +6,7 @@ import cv2
 from ncc_tracker import NCCTrackerImpl
 
 class NCCTracker(object):
-    def __init__(self, image, mask):
+    def __init__(self, image, region):
         self.ncc_ = NCCTrackerImpl(image, region)
 
     def track(self, image):
