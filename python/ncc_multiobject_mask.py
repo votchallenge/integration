@@ -87,3 +87,4 @@ while True:
     image = cv2.imread(imagefile, cv2.IMREAD_GRAYSCALE)
     handle.report([tracker.track(image) for tracker in trackers])
 
+handle.quit()

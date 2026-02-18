@@ -31,7 +31,7 @@ while True:
     # VOT: Report the position of the object 
     #      every frame using report method.
     # *****************************************
-    handle.report(selection)
+    handle.report(selection, confidence=5)
 
     time.sleep(0.01)
 

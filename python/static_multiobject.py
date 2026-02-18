@@ -7,7 +7,7 @@ import cv2
 # which only reports the initialization region for all frames. It only supports single
 # channel (RGB) frames.
 
-handle = vot.VOT("rectangle", multiobject=True)
+handle = vot.VOT("mask", multiobject=True)
 objects = handle.objects()
 
 imagefile = handle.frame()
@@ -21,3 +21,5 @@ while True:
         break
     image = cv2.imread(imagefile, cv2.IMREAD_GRAYSCALE)
     handle.report(objects)
+
+handle.quit()
