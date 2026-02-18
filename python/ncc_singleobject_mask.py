@@ -13,20 +13,20 @@ class NCCTracker(object):
         pred_region, max_val = self.ncc_.track(image)
         return self.ncc_._mask_from_rect(pred_region, (image.shape[1], image.shape[0]))
 
-handle = vot.VOT("mask", multiobject=True)
-objects = handle.objects()
+handle = vot.VOT("mask", multiobject=False)
+init_mask = handle.region()
 
 imagefile = handle.frame()
-
 image = cv2.imread(imagefile, cv2.IMREAD_GRAYSCALE)
 
-trackers = [NCCTracker(image, object) for object in objects]
+tracker = NCCTracker(image, init_mask)
 
 while True:
     imagefile = handle.frame()
     if not imagefile:
         break
     image = cv2.imread(imagefile, cv2.IMREAD_GRAYSCALE)
-    handle.report([tracker.track(image) for tracker in trackers])
 
-handle.quit()
+    region = tracker.track(image)
+
+    handle.report(region)
